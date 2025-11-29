@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function Dashboard() {
   return (
@@ -7,6 +8,9 @@ export default function Dashboard() {
       
       {/* HEADER */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
         <View style={styles.logoBox}>
           <Text style={styles.logoTitle}>Droply</Text>
           <Text style={styles.logoSub}>DISCOVER QUALITY, DELIVERED FAST</Text>
@@ -96,6 +100,15 @@ const styles = StyleSheet.create({
     height: 55,
     borderRadius: 30,
     backgroundColor: "black",
+  },
+
+  backButton: {
+    marginRight: 10,
+    padding: 5,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   /* STATS CARD */

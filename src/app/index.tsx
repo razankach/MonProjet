@@ -1,17 +1,9 @@
+import { router } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Sidebar from '../components/Sidebar';
-import { useNavigation } from '@react-navigation/native';
-import type { StackNavigationProp } from '@react-navigation/stack';
-
-type RootStackParamList = {
-  Home: undefined;
-  Dashboard: undefined;
-  Service: undefined;
-};
 
 export default function Index() {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   return (
     <View style={styles.mainContainer}>
@@ -28,16 +20,18 @@ export default function Index() {
         <View style={styles.boxRow}>
             <TouchableOpacity 
               style={styles.bigBox}
-              onPress={() => navigation.navigate('Dashboard')} // ✅ This should work now
+              onPress={() => router.push('/dashboard')}
             >
               <Text style={styles.boxText}>DASHBOARD</Text>
             </TouchableOpacity>
 
             <View style={styles.smallColumn}>
-              <TouchableOpacity style={styles.smallBoxPurple}>
+              <TouchableOpacity 
+                style={styles.smallBoxPurple}
+                onPress={() => router.push('/send-package' as any)}//any adi 7al mchou mli7 l error t3 typescript mba3ed sahla
+              >
                 <Text style={styles.boxText}>SEND A PACKAGE</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.smallBoxPink}>
                 <Text style={styles.boxText}>DELIVER A PACKAGE</Text>
               </TouchableOpacity>
