@@ -1,68 +1,70 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useState } from 'react';
-import { Platform } from 'react-native';
+import { Session, User } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
-import Constants from 'expo-constants';
+type AuthContextType = {
+  user: User | null;
+  session: Session | null;
+  isLoading: boolean;
+  error: string | null;
+  login: (email: string, password: string) => Promise<any>;
+  register: (name: string, phone: string, email: string, password: string) => Promise<any>;
+  logout: () => Promise<void>;
+};
 
-const AuthContext = createContext<any>(null);
-
-// Dynamic API URL for Expo Go
-const getApiUrl = () => {
-    const debuggerHost = Constants.expoConfig?.hostUri;
-    const localhost = debuggerHost?.split(':')[0];
-    
-    if (localhost) {
-        return `http://${localhost}:5000/api`;
-    }
-    
-    // Fallback for Android Emulator (10.0.2.2) or iOS Simulator (localhost)
-    return Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
-}
-
-const API_URL = getApiUrl();
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
+  isLoading: true,
+  error: null,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
+});
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start loading true
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    // Check for persisted user
-    const loadUser = async () => {
+  useEffect(() => {
+    // 1. Get initial session
+    const checkUser = async () => {
       try {
-        const userJson = await AsyncStorage.getItem('user');
-        if (userJson) {
-          setUser(JSON.parse(userJson));
-        }
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
       } catch (e) {
-        console.log("Failed to load user", e);
+        console.error("Auth load error", e);
       } finally {
         setIsLoading(false);
       }
     };
-    loadUser();
+    checkUser();
+
+    // 2. Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
-      setUser(data);
-      await AsyncStorage.setItem('user', JSON.stringify(data));
+      if (error) throw error;
       return data;
     } catch (err: any) {
       setError(err.message);
@@ -76,22 +78,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            phone: phone,
+            role: 'sender', // Default role
+          },
         },
-        body: JSON.stringify({ name, phone, email, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
-
-      setUser(data);
-      await AsyncStorage.setItem('user', JSON.stringify(data));
+      if (error) throw error;
       return data;
     } catch (err: any) {
       setError(err.message);
@@ -102,12 +101,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = async () => {
-    setUser(null);
-    await AsyncStorage.removeItem('user');
+    setIsLoading(true);
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error(e);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, error, login, register, logout }}>
+    <AuthContext.Provider value={{ user, session, isLoading, error, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

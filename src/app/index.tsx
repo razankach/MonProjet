@@ -8,5 +8,5 @@ export default function Index() {
     return <Redirect href="/home" />;
   }
 
-  return <Redirect href="/auth" />;
+  return null;
 }
