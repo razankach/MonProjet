@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useState } from 'react';
 import { Platform } from 'react-native';
 
@@ -22,10 +23,25 @@ const API_URL = getApiUrl();
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start loading true
   const [error, setError] = useState<string | null>(null);
 
-
+  React.useEffect(() => {
+    // Check for persisted user
+    const loadUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          setUser(JSON.parse(userJson));
+        }
+      } catch (e) {
+        console.log("Failed to load user", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -46,6 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       setUser(data);
+      await AsyncStorage.setItem('user', JSON.stringify(data));
       return data;
     } catch (err: any) {
       setError(err.message);
@@ -74,6 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       setUser(data);
+      await AsyncStorage.setItem('user', JSON.stringify(data));
       return data;
     } catch (err: any) {
       setError(err.message);
@@ -83,8 +101,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
+    await AsyncStorage.removeItem('user');
   };
 
   return (
