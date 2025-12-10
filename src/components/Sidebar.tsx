@@ -1,58 +1,75 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
-export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const slideAnim = useRef(new Animated.Value(-280)).current;
+const { height } = Dimensions.get('window');
+
+interface SidebarProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const slideAnim = useRef(new Animated.Value(-300)).current; 
+  
   const { user } = useAuth();
+  const userName = user?.user_metadata?.full_name?.split(' ')[0] || 'Guest';
 
-  const toggleSidebar = () => {
-    const toValue = isOpen ? -280 : 0;
+  useEffect(() => {
+    const toValue = isOpen ? 0 : -300;
     
-    Animated.timing(slideAnim, {
+    Animated.spring(slideAnim, {
       toValue,
-      duration: 300,
       useNativeDriver: true,
+      friction: 8,
+      tension: 40
     }).start();
-
-    setIsOpen(!isOpen);
-  };
+  }, [isOpen]);
 
   const menuItems = [
-    { id: 1, label: 'Home', icon: 'home' },
-    { id: 2, label: 'Packages', icon: 'package' },
-    { id: 3, label: 'Deliveries', icon: 'truck' },
-    { id: 4, label: 'Reviews', icon: 'star' },
-    { id: 5, label: 'Notifications', icon: 'bell' },
-    { id: 6, label: 'Profile', icon: 'user' },
-    { id: 7, label: 'Settings', icon: 'settings' },
+    { id: 1, label: 'Home', icon: 'home', route: '/home' },
+    { id: 2, label: 'Packages', icon: 'package', route: '/packages' },
+    { id: 3, label: 'Deliveries', icon: 'truck', route: '/deliveries' },
+    { id: 4, label: 'Reviews', icon: 'star', route: '/reviews' },
+    { id: 5, label: 'Notifications', icon: 'bell', route: '/notifications' },
+    { id: 6, label: 'Profile', icon: 'user', route: '/profile' },
+    { id: 7, label: 'Settings', icon: 'settings', route: '/settings' },
   ];
 
   return (
-    <View style={styles.container}>
-      
+    <>
+      {/* Overlay Background */}
       {isOpen && (
-        <TouchableOpacity 
-            style={styles.overlay} 
-            activeOpacity={1} 
-            onPress={toggleSidebar} 
-        />
+        <Animated.View 
+            style={[styles.overlay]}
+        >
+             <TouchableOpacity 
+                style={StyleSheet.absoluteFill} 
+                activeOpacity={1} 
+                onPress={onClose} 
+            />
+        </Animated.View>
       )}
 
+      {/* Sidebar Content */}
       <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
         
+        {/* Close Button inside Sidebar */}
+        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Feather name="x" size={24} color="#666" />
+        </TouchableOpacity>
+
         <View style={styles.header}>
             <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                    {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    {userName[0]}
                 </Text>
             </View>
             <View>
                 <Text style={styles.greeting}>Hello,</Text>
-                <Text style={styles.username}>{user?.name || 'Guest'}</Text>
+                <Text style={styles.username}>{userName}</Text>
             </View>
         </View>
 
@@ -64,9 +81,8 @@ export default function Sidebar() {
                 key={item.id} 
                 style={styles.menuItem}
                 onPress={() => {
-                    if (item.label === 'Home') router.push('/home');
-                    if (item.label === 'Profile') router.push('/profile');
-                    toggleSidebar();
+                    if (item.route) router.push(item.route as any);
+                    onClose();
                 }}
             >
                 <Feather name={item.icon as any} size={20} color="#666" style={styles.menuIcon} />
@@ -75,85 +91,88 @@ export default function Sidebar() {
             ))}
         </View>
 
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={() => {/* Add logout logic */}}>
+            <Feather name="log-out" size={20} color="#FF3B30" style={styles.menuIcon} />
+            <Text style={[styles.menuLabel, { color: '#FF3B30' }]}>Logout</Text>
+        </TouchableOpacity>
 
       </Animated.View>
-
-      {!isOpen && ( 
-        <TouchableOpacity style={styles.toggleButton} onPress={toggleSidebar}>
-            <Feather name="menu" size={24} color="#fff" />
-        </TouchableOpacity>
-      )}
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute', 
-    zIndex: 100,
-  },
   overlay: {
     position: 'absolute',
-    width: 1000, 
-    height: 2000,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     top: 0,
     left: 0,
-    zIndex: 90,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 900,
+    elevation: 900,
   },
   sidebar: {
     position: 'absolute',
     left: 0,
     top: 0,
-    bottom: 0, 
-    height: 1000, 
+    bottom: 0,
     width: 280,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFF',
     paddingTop: 60,
-    paddingHorizontal: 20,
-    zIndex: 100,
+    paddingHorizontal: 24,
+    zIndex: 1100, 
+    elevation: 1100,
     shadowColor: "#000",
-    shadowOffset: {
-        width: 0,
-        height: 5,
-    },
-    shadowOpacity: 0.34,
-    shadowRadius: 6.27,
-    elevation: 10,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#F3F4F6',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 45,
+    right: 20,
+    padding: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 10,
+    marginBottom: 40,
+    marginTop: 20,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#e5d9f2', 
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3E5F5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#E1BEE7',
   },
   avatarText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#6a1b9a', 
+    fontWeight: '700',
+    color: '#8E24AA',
   },
   greeting: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
   },
   username: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: '#1A1A1A',
   },
   divider: {
     height: 1,
-    backgroundColor: '#f0f0f0',
-    marginBottom: 20,
+    backgroundColor: '#F3F4F6',
+    marginBottom: 24,
   },
   menuContainer: {
     flex: 1,
@@ -161,38 +180,28 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     marginBottom: 8,
-    borderRadius: 10,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
   },
   menuIcon: {
-    marginRight: 15,
-    color: '#d992a8',
+    marginRight: 16,
+    color: '#555',
   },
   menuLabel: {
     fontSize: 16,
     fontWeight: '500',
     color: '#333',
   },
-  toggleButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#d992a8', 
-    borderRadius: 25,
-    justifyContent: 'center',
+  logoutButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    position: 'absolute',
-    top: 50, 
-    left: 20,
-    zIndex: 101,
-    shadowColor: "#000",
-    shadowOffset: {
-        width: 0,
-        height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginBottom: 20,
   },
 });

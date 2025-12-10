@@ -1,206 +1,392 @@
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function Dashboard() {
-  return (
-    <ScrollView style={styles.container}>
+  const { user } = useAuth();
+  const [viewMode, setViewMode] = useState<'sent' | 'deliveries'>('sent');
+  const [packages, setPackages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Stats (Real calculation could be added later, for now mocks or simple counts)
+  const [stats, setStats] = useState({ total: 0, active: 0, rating: 4.8 });
+
+  useEffect(() => {
+    fetchPackages();
+  }, [viewMode]);
+
+  const fetchPackages = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      let query = supabase.from('packages').select('*').order('created_at', { ascending: false });
+
+      if (viewMode === 'sent') {
+          query = query.eq('sender_id', user.id);
+      } else {
+          query = query.eq('deliverer_id', user.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setPackages(data || []);
       
-      {/* HEADER */}
+      // Update quick stats based on fetched data
+      setStats(prev => ({
+          ...prev,
+          total: data?.length || 0,
+          active: data?.filter(p => p.status === 'pending' || p.status === 'in_transit').length || 0
+      }));
+
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+      switch (status) {
+          case 'pending': return '#FFA000'; // Amber
+          case 'in_transit': return '#2196F3'; // Blue
+          case 'delivered': return '#4CAF50'; // Green
+          case 'cancelled': return '#F44336'; // Red
+          default: return '#757575';
+      }
+  };
+
+  const getStatusLabel = (status: string) => {
+    return status.replace('_', ' ').toUpperCase();
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Feather name="arrow-left" size={24} color="#333" />
         </TouchableOpacity>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoTitle}>Droply</Text>
-          <Text style={styles.logoSub}>DISCOVER QUALITY, DELIVERED FAST</Text>
-        </View>
-
-        <View style={styles.profileCircle} />
+        <Image 
+          source={{ uri: 'https://img.icons8.com/color/96/box-other.png' }} 
+          style={styles.logo} 
+        />
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* STATS BIG CARD */}
-      <View style={styles.statsCard}>
-
-        <View style={styles.circleBig}>
-          <Text style={styles.circleText}>Total deliveries</Text>
-        </View>
-
-        <View style={styles.circleMedium}>
-          <Text style={styles.circleText}>Pending tasks</Text>
-        </View>
-
-        <View style={styles.circleSmall}>
-          <Text style={styles.circleText}>Rating</Text>
-        </View>
-
+      {/* Stats Circles */}
+      <View style={styles.statsContainer}>
+          {/* Main big circle */}
+          <View style={[styles.circle, styles.circleBig]}>
+               <Text style={styles.circleNumber}>{stats.total}</Text>
+               <Text style={styles.circleLabel}>Total</Text>
+          </View>
+          {/* Medium circle */}
+          <View style={[styles.circle, styles.circleMedium]}>
+               <Text style={styles.circleNumber}>{stats.active}</Text>
+               <Text style={styles.circleLabel}>Active</Text>
+          </View>
+          {/* Small circle */}
+          <View style={[styles.circle, styles.circleSmall]}>
+               <View style={{flexDirection:'row', alignItems:'center'}}>
+                   <Text style={[styles.circleNumber, {fontSize: 14}]}>{stats.rating}</Text>
+                   <FontAwesome5 name="star" size={10} color="#FFF" style={{marginLeft:2}} />
+               </View>
+               <Text style={[styles.circleLabel, {fontSize:10}]}>Rating</Text>
+          </View>
       </View>
 
-      {/* MY DELIVERY LIST */}
-      <Text style={styles.sectionTitle}>My delivery</Text>
+      {/* ToggleSwitch */}
+      <View style={styles.toggleContainer}>
+           <TouchableOpacity 
+              style={[styles.pillOption, viewMode === 'sent' && styles.pillSelected]} 
+              onPress={() => setViewMode('sent')}
+           >
+              <Text style={[styles.pillText, viewMode === 'sent' && styles.textSelected]}>Sent Packages</Text>
+           </TouchableOpacity>
 
+           <TouchableOpacity 
+              style={[styles.pillOption, viewMode === 'deliveries' && styles.pillSelected]} 
+              onPress={() => setViewMode('deliveries')}
+           >
+              <Text style={[styles.pillText, viewMode === 'deliveries' && styles.textSelected]}>My Deliveries</Text>
+           </TouchableOpacity>
+      </View>
+
+      {/* List Header */}
+      <View style={styles.listHeader}>
+         <Text style={styles.sectionTitle}>
+             {viewMode === 'sent' ? 'History of Sent Items' : 'Assigned Deliveries'}
+         </Text>
+         <TouchableOpacity onPress={fetchPackages}>
+             <Feather name="refresh-ccw" size={16} color="#4A148C" />
+         </TouchableOpacity>
+      </View>
+
+      {/* List */}
       <View style={styles.listContainer}>
-        <DeliveryItem code="k5695895fg" />
-        <DeliveryItem code="dd28365fk" />
-        <DeliveryItem code="fg7566457f" />
+        {loading ? (
+            <ActivityIndicator size="large" color="#4A148C" style={{ marginTop: 20 }} />
+        ) : packages.length === 0 ? (
+            <View style={styles.emptyState}>
+                <Feather name="package" size={40} color="#DDD" />
+                <Text style={styles.emptyText}>No packages found.</Text>
+            </View>
+        ) : (
+            packages.map((item, index) => (
+                <View key={item.id}>
+                    <TouchableOpacity 
+                        activeOpacity={0.9}
+                        onPress={() => router.push(`/package-details/${item.id}`)}
+                    >
+                    <Animated.View 
+                        entering={FadeInDown.delay(index * 100)}
+                        style={styles.card}
+                    >
+                        <View style={styles.cardLeft}>
+                            <View style={[styles.iconBox, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                                 <Feather name="box" size={20} color={getStatusColor(item.status)} />
+                            </View>
+                            <View style={styles.cardContent}>
+                                <Text style={styles.cardTitle}>{item.title}</Text>
+                                <Text style={styles.cardSubtitle} numberOfLines={1}>
+                                    To: {item.dropoff_address.split(',')[0]}
+                                </Text>
+                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
+                                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                        {getStatusLabel(item.status)}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                        <View style={styles.cardRight}>
+                            <Text style={styles.timeText}>
+                                {new Date(item.created_at).toLocaleDateString()}
+                            </Text>
+                            <Feather name="chevron-right" size={20} color="#CCC" />
+                        </View>
+                    </Animated.View>
+                    </TouchableOpacity>
+                </View>
+            ))
+        )}
       </View>
-
     </ScrollView>
   );
 }
 
-/* COMPONENT: Delivery List Row */
-type DeliveryItemProps = {
-  code: string;
-};
-
-const DeliveryItem: React.FC<DeliveryItemProps> = ({ code }) => (
-  <View style={styles.deliveryRow}>
-    <View style={styles.dot} />
-    <Text style={styles.deliveryCode}>{code}</Text>
-
-    <TouchableOpacity style={styles.detailsBtn}>
-      <Text style={styles.detailsText}>details</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-/* STYLES */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#fff",
+    backgroundColor: '#F8F9FA',
   },
-
-  /* HEADER */
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 15,
   },
-
-  logoBox: {
-    flexDirection: "column",
-  },
-
-  logoTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-  },
-
-  logoSub: {
-    fontSize: 12,
-    letterSpacing: 0.5,
-    opacity: 0.7,
-  },
-
-  profileCircle: {
-    width: 55,
-    height: 55,
-    borderRadius: 30,
-    backgroundColor: "black",
-  },
-
   backButton: {
-    marginRight: 10,
-    padding: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
   },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  logo: {
+      width: 40,
+      height: 40,
   },
-
-  /* STATS CARD */
-  statsCard: {
-    marginTop: 25,
-    backgroundColor: "#efe7f2",
-    borderRadius: 25,
-    padding: 25,
-    height: 250,
+  
+  /* Stats Circles */
+  statsContainer: {
+      height: 220,
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+      marginBottom: 0,
   },
-
+  circle: {
+      position: 'absolute',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 150,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 15,
+      elevation: 10,
+  },
   circleBig: {
-    position: "absolute",
-    top: 20,
-    left: 15,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    borderWidth: 2,
+      width: 140,
+      height: 140,
+      backgroundColor: '#4A148C', // Deep Purple
+      zIndex: 1,
+      top: 20,
+      left: '50%',
+      transform: [{ translateX: -70 }],
+      borderWidth: 4,
+      borderColor: '#FFF',
   },
-
   circleMedium: {
-    position: "absolute",
-    top: 30,
-    right: 25,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
+      width: 100,
+      height: 100,
+      backgroundColor: '#7B1FA2', // Purple
+      zIndex: 2,
+      top: 90,
+      left: '50%',
+      transform: [{ translateX: 20 }], // shift right
+      borderWidth: 3,
+      borderColor: '#FFF',
   },
-
   circleSmall: {
-    position: "absolute",
-    bottom: 20,
-    left: 100,
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    borderWidth: 2,
+      width: 70,
+      height: 70,
+      backgroundColor: '#C2185B', // Pink
+      zIndex: 3,
+      top: 130,
+      left: '50%',
+      transform: [{ translateX: -80 }], // shift left
+      borderWidth: 2,
+      borderColor: '#FFF',
+  },
+  circleNumber: {
+      color: '#FFF',
+      fontSize: 28,
+      fontWeight: 'bold',
+  },
+  circleLabel: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 12,
+      fontWeight: '600',
+      textTransform: 'uppercase',
   },
 
-  circleText: {
-    position: "absolute",
-    width: "100%",
-    textAlign: "center",
-    top: "40%",
-    fontWeight: "600",
+  /* Toggle */
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#EDE7F6',
+    marginHorizontal: 24,
+    borderRadius: 50,
+    padding: 4,
+    marginBottom: 20,
   },
-
-  /* MY DELIVERY */
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginVertical: 20,
-  },
-
-  listContainer: {
-    gap: 15,
-  },
-
-  deliveryRow: {
-    backgroundColor: "#f7e9ff",
-    padding: 15,
-    borderRadius: 15,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  dot: {
-    width: 18,
-    height: 18,
-    borderRadius: 10,
-    backgroundColor: "black",
-    marginRight: 15,
-  },
-
-  deliveryCode: {
+  pillOption: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: "600",
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 40,
+  },
+  pillSelected: {
+      backgroundColor: '#4A148C',
+      shadowColor: "#4A148C",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 3,
+  },
+  pillText: {
+      fontWeight: '600',
+      color: '#7B1FA2',
+  },
+  textSelected: {
+      color: '#FFF',
   },
 
-  detailsBtn: {
-    backgroundColor: "#e3d4e8",
-    paddingVertical: 6,
-    paddingHorizontal: 15,
-    borderRadius: 10,
+  /* List */
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 10,
   },
-
-  detailsText: {
-    fontWeight: "600",
-    opacity: 0.8,
+  sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#333',
+  },
+  listContainer: {
+      paddingHorizontal: 24,
+  },
+  card: {
+      backgroundColor: '#FFF',
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+  },
+  cardLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+  },
+  iconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+  },
+  cardContent: {
+      flex: 1,
+  },
+  cardTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#1A1A1A',
+      marginBottom: 2,
+  },
+  cardSubtitle: {
+      fontSize: 12,
+      color: '#777',
+      marginBottom: 6,
+  },
+  statusBadge: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+  },
+  statusText: {
+      fontSize: 10,
+      fontWeight: '700',
+  },
+  cardRight: {
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      height: 40,
+  },
+  timeText: {
+      fontSize: 10,
+      color: '#AAA',
+      marginBottom: 8,
+  },
+  emptyState: {
+      alignItems: 'center',
+      marginTop: 40,
+  },
+  emptyText: {
+      color: '#999',
+      marginTop: 10,
+      fontSize: 14,
   },
 });
-
