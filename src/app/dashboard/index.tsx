@@ -1,5 +1,5 @@
-import { Feather, FontAwesome5 } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,12 +8,19 @@ import { supabase } from '../../lib/supabase';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<'sent' | 'deliveries'>('sent');
+  const { view } = useLocalSearchParams();
+  const [viewMode, setViewMode] = useState<'sent' | 'deliveries'>((view as 'sent' | 'deliveries') || 'sent');
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Stats (Real calculation could be added later, for now mocks or simple counts)
-  const [stats, setStats] = useState({ total: 0, active: 0, rating: 4.8 });
+  // Stats
+  const [stats, setStats] = useState({ total: 0, active: 0 });
+
+  useEffect(() => {
+    if (view && (view === 'sent' || view === 'deliveries')) {
+        setViewMode(view as 'sent' | 'deliveries');
+    }
+  }, [view]);
 
   useEffect(() => {
     fetchPackages();
@@ -35,11 +42,11 @@ export default function Dashboard() {
       if (error) throw error;
       setPackages(data || []);
       
-      // Update quick stats based on fetched data
+      // Update stats based on fetched data (simplified)
       setStats(prev => ({
           ...prev,
           total: data?.length || 0,
-          active: data?.filter(p => p.status === 'pending' || p.status === 'in_transit').length || 0
+          active: data?.filter(p => p.status === 'pending' || p.status === 'in_transit' || p.status === 'assigned').length || 0
       }));
 
     } catch (e) {
@@ -49,9 +56,25 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeliverPackage = async (packageId: number) => {
+      try {
+          const { error } = await supabase
+              .from('packages')
+              .update({ status: 'delivered' })
+              .eq('id', packageId);
+          
+          if (error) throw error;
+          fetchPackages();
+      } catch (e) {
+          console.error(e);
+          alert("Failed to update status.");
+      }
+  };
+
   const getStatusColor = (status: string) => {
       switch (status) {
           case 'pending': return '#FFA000'; // Amber
+          case 'assigned': return '#7B1FA2'; // Purple
           case 'in_transit': return '#2196F3'; // Blue
           case 'delivered': return '#4CAF50'; // Green
           case 'cancelled': return '#F44336'; // Red
@@ -60,7 +83,7 @@ export default function Dashboard() {
   };
 
   const getStatusLabel = (status: string) => {
-    return status.replace('_', ' ').toUpperCase();
+      return status.replace('_', ' ').toUpperCase();
   };
 
   return (
@@ -89,14 +112,6 @@ export default function Dashboard() {
                <Text style={styles.circleNumber}>{stats.active}</Text>
                <Text style={styles.circleLabel}>Active</Text>
           </View>
-          {/* Small circle */}
-          <View style={[styles.circle, styles.circleSmall]}>
-               <View style={{flexDirection:'row', alignItems:'center'}}>
-                   <Text style={[styles.circleNumber, {fontSize: 14}]}>{stats.rating}</Text>
-                   <FontAwesome5 name="star" size={10} color="#FFF" style={{marginLeft:2}} />
-               </View>
-               <Text style={[styles.circleLabel, {fontSize:10}]}>Rating</Text>
-          </View>
       </View>
 
       {/* ToggleSwitch */}
@@ -105,7 +120,7 @@ export default function Dashboard() {
               style={[styles.pillOption, viewMode === 'sent' && styles.pillSelected]} 
               onPress={() => setViewMode('sent')}
            >
-              <Text style={[styles.pillText, viewMode === 'sent' && styles.textSelected]}>Sent Packages</Text>
+              <Text style={[styles.pillText, viewMode === 'sent' && styles.textSelected]}>Sent</Text>
            </TouchableOpacity>
 
            <TouchableOpacity 
@@ -119,7 +134,7 @@ export default function Dashboard() {
       {/* List Header */}
       <View style={styles.listHeader}>
          <Text style={styles.sectionTitle}>
-             {viewMode === 'sent' ? 'History of Sent Items' : 'Assigned Deliveries'}
+             {viewMode === 'sent' ? 'Sent History' : 'My Deliveries'}
          </Text>
          <TouchableOpacity onPress={fetchPackages}>
              <Feather name="refresh-ccw" size={16} color="#4A148C" />
@@ -140,7 +155,7 @@ export default function Dashboard() {
                 <View key={item.id}>
                     <TouchableOpacity 
                         activeOpacity={0.9}
-                        onPress={() => router.push(`/package-details/${item.id}`)}
+                        onPress={() => router.push(`/package-details/${item.id}`)} // Assumes this route exists, keeping logical flow
                     >
                     <Animated.View 
                         entering={FadeInDown.delay(index * 100)}
@@ -153,20 +168,41 @@ export default function Dashboard() {
                             <View style={styles.cardContent}>
                                 <Text style={styles.cardTitle}>{item.title}</Text>
                                 <Text style={styles.cardSubtitle} numberOfLines={1}>
-                                    To: {item.dropoff_address.split(',')[0]}
+                                    To: {item.dropoff_address ? item.dropoff_address.split(',')[0] : 'Unknown'}
                                 </Text>
-                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-                                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                                        {getStatusLabel(item.status)}
-                                    </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15', marginRight: 8 }]}>
+                                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                            {getStatusLabel(item.status)}
+                                        </Text>
+                                    </View>
+                                    {item.price && (
+                                        <Text style={{ fontSize: 12, color: '#333', fontWeight: '600' }}>
+                                            {item.price} DA
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
                         </View>
+                        
                         <View style={styles.cardRight}>
-                            <Text style={styles.timeText}>
-                                {new Date(item.created_at).toLocaleDateString()}
-                            </Text>
-                            <Feather name="chevron-right" size={20} color="#CCC" />
+                             {/* Action Buttons based on ViewMode and Status */}
+                             {viewMode === 'deliveries' && item.status !== 'delivered' && (
+                                 <TouchableOpacity 
+                                    style={[styles.actionBtn, { backgroundColor: '#4CAF50' }]} 
+                                    onPress={() => handleDeliverPackage(item.id)}
+                                 >
+                                     <Text style={styles.actionBtnText}>Done</Text>
+                                 </TouchableOpacity>
+                             )}
+
+                             {/* Fallback Date if no action needed */}
+                             {!(viewMode === 'deliveries' && item.status !== 'delivered') &&
+                              (
+                                <Text style={styles.timeText}>
+                                    {new Date(item.created_at).toLocaleDateString()}
+                                </Text>
+                             )}
                         </View>
                     </Animated.View>
                     </TouchableOpacity>
@@ -388,5 +424,20 @@ const styles = StyleSheet.create({
       color: '#999',
       marginTop: 10,
       fontSize: 14,
+  },
+  actionBtn: {
+      backgroundColor: '#7B1FA2',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      elevation: 2,
+  },
+  actionBtnText: {
+      color: '#FFF',
+      fontWeight: '600',
+      fontSize: 12,
   },
 });

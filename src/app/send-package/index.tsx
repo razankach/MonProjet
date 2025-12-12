@@ -24,6 +24,7 @@ export default function SendPackage() {
   const [packageType, setPackageType] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [weight, setWeight] = useState('');
+  const [price, setPrice] = useState('');
   const [instructions, setInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -140,6 +141,7 @@ export default function SendPackage() {
                 pickup_address: fromAddress,
                 dropoff_address: toAddress,
                 weight: weight ? parseFloat(weight) : null,
+                price: price ? parseFloat(price) : null,
                 status: 'pending'
             });
 
@@ -317,6 +319,18 @@ export default function SendPackage() {
                 placeholderTextColor="#999"
                 value={recipientName}
                 onChangeText={setRecipientName}
+            />
+        </View>
+
+        <View style={[styles.floatingInput, { marginTop: 15 }]}>
+            <Feather name="dollar-sign" size={20} color="#555" />
+            <TextInput 
+                style={styles.bareInput} 
+                placeholder="Offering Price (DA)" 
+                placeholderTextColor="#999" 
+                keyboardType="numeric"
+                value={price}
+                onChangeText={setPrice}
             />
         </View>
 

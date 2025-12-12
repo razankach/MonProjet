@@ -48,10 +48,10 @@ export default function Home() {
             </View>
 
             <TouchableOpacity onPress={() => router.push('/profile')} style={styles.profileButton}>
-               {/* Placeholder for avatar, could be user image later */}
                <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarText}>{userName[0]}</Text>
                </View>
+               <View style={styles.onlineBadge} />
             </TouchableOpacity>
         </View>
 
@@ -107,15 +107,16 @@ export default function Home() {
           <Text style={styles.sectionTitle}>Services</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesScroll}>
             {[
-              { name: "Droply Map", icon: "map-outline", route: "/map" },
-              { name: "Track Package", icon: "cube-outline", route: "/track" },
-              { name: "Promotions", icon: "pricetag-outline", route: "/promo" },
-              { name: "Support", icon: "headset-outline", route: "/support" }
+              { name: "Droply Map", icon: "map-outline", route: "/coming-soon" },
+              { name: "Track Package", icon: "cube-outline", route: "/coming-soon" },
+              { name: "Promotions", icon: "pricetag-outline", route: "/coming-soon" },
+              { name: "Support", icon: "headset-outline", route: "/coming-soon" }
             ].map((item, index) => (
               <TouchableOpacity
                 key={index}
                 style={styles.serviceItem}
                 activeOpacity={0.8}
+                onPress={() => router.push(item.route as any)}
               >
                 <View style={styles.serviceIconContainer}>
                    <Ionicons name={item.icon as any} size={24} color="#333" />
@@ -130,10 +131,14 @@ export default function Home() {
         <View style={styles.activitySection}>
            <Text style={styles.sectionTitle}>Recent Updates</Text>
            <View style={styles.infoCard}>
-             <Ionicons name="notifications-circle" size={40} color="#FFD700" />
+             <Ionicons name="sparkles" size={40} color="#7B1FA2" />
              <View style={styles.infoTextContainer}>
-               <Text style={styles.infoTitle}>New Feature!</Text>
-               <Text style={styles.infoDesc}>Real-time tracking is now available in your area.</Text>
+               <Text style={styles.infoTitle}>Experience Improved!</Text>
+               <Text style={styles.infoDesc}>
+                 • Streamlined Sidebar Navigation{'\n'}
+                 • Direct access to Sent & Deliveries{'\n'}
+                 • Price offering for new packages
+               </Text>
              </View>
            </View>
         </View>
@@ -204,7 +209,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: 50,
     height: 50,
-    backgroundColor: '#333',
+    backgroundColor: '#E1BEE7', // Light Purple
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
@@ -212,9 +217,20 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   avatarText: {
-    color: '#FFF',
-    fontSize: 20,
+    color: '#4A148C', // Deep Purple
+    fontSize: 22,
     fontWeight: 'bold',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   gridContainer: {
     marginBottom: 30,

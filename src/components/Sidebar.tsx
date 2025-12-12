@@ -30,12 +30,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const menuItems = [
     { id: 1, label: 'Home', icon: 'home', route: '/home' },
-    { id: 2, label: 'Packages', icon: 'package', route: '/packages' },
-    { id: 3, label: 'Deliveries', icon: 'truck', route: '/deliveries' },
-    { id: 4, label: 'Reviews', icon: 'star', route: '/reviews' },
-    { id: 5, label: 'Notifications', icon: 'bell', route: '/notifications' },
+    { id: 2, label: 'Packages', icon: 'package', route: '/dashboard?view=sent' },
+    { id: 3, label: 'Deliveries', icon: 'truck', route: '/dashboard?view=deliveries' },
     { id: 6, label: 'Profile', icon: 'user', route: '/profile' },
-    { id: 7, label: 'Settings', icon: 'settings', route: '/settings' },
   ];
 
   return (

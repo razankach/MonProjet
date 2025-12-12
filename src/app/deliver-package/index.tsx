@@ -123,7 +123,9 @@ export default function DeliverPackage() {
                                 <Feather name="box" size={14} color="#7B1FA2" />
                                 <Text style={styles.typeText}>{item.title}</Text>
                             </View>
-                            <Text style={styles.priceTag}>$15.00</Text> 
+                            <Text style={styles.priceTag}>
+                                {item.price ? `${item.price} DA` : 'No Offer'}
+                            </Text> 
                         </View>
 
                         {/* Route */}

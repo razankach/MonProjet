@@ -144,6 +144,16 @@ export default function PackageDetails() {
                         <Text style={styles.gridValue}>{packageData.weight ? `${packageData.weight} kg` : 'N/A'}</Text>
                     </View>
                 </View>
+
+                {/* Price Row */}
+                <View style={[styles.grid, { marginTop: 15 }]}>
+                    <View style={styles.gridItem}>
+                        <Text style={styles.gridLabel}>Price</Text>
+                        <Text style={styles.gridValue}>
+                             {packageData.price ? `${packageData.price} DA` : 'Not Set'}
+                        </Text>
+                    </View>
+                </View>
                 <View style={[styles.grid, { marginTop: 15 }]}>
                     <View style={styles.gridItem}>
                          <Text style={styles.gridLabel}>Note</Text>
