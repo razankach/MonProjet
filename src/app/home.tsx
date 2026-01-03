@@ -107,8 +107,8 @@ export default function Home() {
           <Text style={styles.sectionTitle}>Services</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesScroll}>
             {[
-              { name: "Droply Map", icon: "map-outline", route: "/coming-soon" },
-              { name: "Track Package", icon: "cube-outline", route: "/coming-soon" },
+              { name: "Droply Map", icon: "map-outline", route: "/droply-map" },
+              { name: "Track Package", icon: "cube-outline", route: "/track-package" },
               { name: "Promotions", icon: "pricetag-outline", route: "/coming-soon" },
               { name: "Support", icon: "headset-outline", route: "/coming-soon" }
             ].map((item, index) => (
@@ -133,12 +133,14 @@ export default function Home() {
            <View style={styles.infoCard}>
              <Ionicons name="sparkles" size={40} color="#7B1FA2" />
              <View style={styles.infoTextContainer}>
-               <Text style={styles.infoTitle}>Experience Improved!</Text>
-               <Text style={styles.infoDesc}>
-                 • Streamlined Sidebar Navigation{'\n'}
-                 • Direct access to Sent & Deliveries{'\n'}
-                 • Price offering for new packages
-               </Text>
+                <Text style={styles.infoTitle}>New Features Added! </Text>
+                <Text style={styles.infoDesc}>
+                  • Track Package: Monitor all in-transit deliveries{'\n'}
+                  • Improved Send Package UI with type selector{'\n'}
+                  • Phone number input for recipients{'\n'}
+                  • Map centers on your location{'\n'}
+                  • Color-coded package status badges
+                </Text>
              </View>
            </View>
         </View>

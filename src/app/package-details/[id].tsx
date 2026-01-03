@@ -1,13 +1,16 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import TrackingMap from '../../components/TrackingMap';
 import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+import { useAuth } from '../../context/AuthContext';
 
 export default function PackageDetails() {
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const [packageData, setPackageData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -73,7 +76,29 @@ export default function PackageDetails() {
   // User asked for "see details", map is nice but maybe optional if strictly address-based.
   // Let's stick to a clean UI with no map for now to avoid broken map pins, focusing on the data.
   
-  return (
+
+
+    const handleUpdateStatus = async (newStatus: string) => {
+        try {
+            const { error } = await supabase
+                .from('packages')
+                .update({ status: newStatus })
+                .eq('id', packageData.id);
+
+            if (error) throw error;
+            
+            // Optimistic update
+            setPackageData({ ...packageData, status: newStatus });
+            alert(`Package marked as ${getStatusLabel(newStatus)}`);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update status");
+        }
+    };
+
+    const isDeliverer = user && packageData.deliverer_id === user.id;
+
+    return (
     <View style={styles.container}>
         
         {/* Header */}
@@ -87,6 +112,21 @@ export default function PackageDetails() {
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
             
+            {/* Tracking Map with Realtime/Simulated Data */}
+            <View>
+                <TrackingMap 
+                    pickupAddress={packageData.pickup_address}
+                    dropoffAddress={packageData.dropoff_address}
+                    status={packageData.status}
+                    currentLat={packageData.current_latitude}
+                    currentLng={packageData.current_longitude}
+                    pickupLat={packageData.pickup_latitude}
+                    pickupLng={packageData.pickup_longitude}
+                    dropoffLat={packageData.dropoff_latitude}
+                    dropoffLng={packageData.dropoff_longitude}
+                />
+            </View>
+
             {/* Status Card */}
             <View style={styles.statusCard}>
                 <View style={[styles.statusIcon, { backgroundColor: getStatusColor(packageData.status) + '20' }]}>
@@ -102,6 +142,28 @@ export default function PackageDetails() {
                     </Text>
                 </View>
             </View>
+
+            {/* ACTION BUTTONS FOR DELIVERER */}
+            {isDeliverer && packageData.status === 'assigned' && (
+                <TouchableOpacity 
+                    style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
+                    onPress={() => handleUpdateStatus('in_transit')}
+                >
+                    <FontAwesome5 name="shipping-fast" size={18} color="#FFF" style={{ marginRight: 10 }} />
+                    <Text style={styles.actionButtonText}>Start Delivery</Text>
+                </TouchableOpacity>
+            )}
+
+            {isDeliverer && packageData.status === 'in_transit' && (
+                <TouchableOpacity 
+                    style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                    onPress={() => handleUpdateStatus('delivered')}
+                >
+                    <Feather name="check-circle" size={20} color="#FFF" style={{ marginRight: 10 }} />
+                    <Text style={styles.actionButtonText}>Complete Delivery</Text>
+                </TouchableOpacity>
+            )}
+
 
             {/* Route Section */}
             <View style={styles.section}>
@@ -167,12 +229,11 @@ export default function PackageDetails() {
                 <Text style={styles.sectionHeader}>Contact Info</Text>
                 <View style={styles.partyRow}>
                     <View style={styles.partyIcon}>
-                        <Feather name="user" size={20} color="#555" />
+                        <Feather name="phone-call" size={20} color="#555" />
                     </View>
-                    <View>
-                        <Text style={styles.routeLabel}>Sender</Text>
-                        <Text style={styles.routeAddress}>{packageData.sender?.full_name || 'Unknown'}</Text>
-                        <Text style={styles.subText}>{packageData.sender?.phone_number || 'No phone'}</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.routeLabel}>Recipient</Text>
+                        <Text style={styles.routeAddress}>{packageData.description}</Text>
                     </View>
                 </View>
                 
@@ -210,20 +271,32 @@ const styles = StyleSheet.create({
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingTop: 50,
-      paddingBottom: 20,
-      paddingHorizontal: 20,
+      paddingBottom: 25,
+      paddingHorizontal: 24,
       backgroundColor: '#4A148C',
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+      shadowColor: '#4A148C',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 10,
+      zIndex: 100,
   },
   backButton: {
       padding: 8,
+      borderRadius: 12,
+      backgroundColor: 'rgba(255,255,255,0.2)',
   },
   headerTitle: {
       color: '#FFF',
       fontSize: 18,
       fontWeight: '700',
+      letterSpacing: 0.5,
   },
   scrollContent: {
-      padding: 20,
+      padding: 24,
+      paddingTop: 10,
   },
   
   /* Status Card */
@@ -231,63 +304,67 @@ const styles = StyleSheet.create({
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: '#FFF',
-      padding: 20,
-      borderRadius: 16,
-      marginBottom: 20,
+      padding: 24,
+      borderRadius: 24,
+      marginBottom: 24,
+      marginTop: -20, // Overlap header slightly
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
+      shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowRadius: 12,
+      elevation: 8,
   },
   statusIcon: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       justifyContent: 'center',
       alignItems: 'center',
   },
   statusLabel: {
       color: '#888',
-      fontSize: 12,
-      fontWeight: '600',
+      fontSize: 11,
+      fontWeight: '700',
       textTransform: 'uppercase',
+      letterSpacing: 1,
   },
   statusValue: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginVertical: 4,
+      fontSize: 22,
+      fontWeight: '800',
+      marginTop: 4,
+      marginBottom: 6,
   },
   dateText: {
       color: '#AAA',
       fontSize: 12,
+      fontWeight: '500',
   },
 
   /* Sections */
   section: {
       backgroundColor: '#FFF',
-      borderRadius: 16,
-      padding: 20,
+      borderRadius: 24,
+      padding: 24,
       marginBottom: 20,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
+      shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.05,
-      shadowRadius: 5,
+      shadowRadius: 8,
       elevation: 2,
   },
   sectionHeader: {
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: '700',
-      color: '#333',
-      marginBottom: 15,
+      color: '#1A1A1A',
+      marginBottom: 20,
       borderBottomWidth: 1,
-      borderBottomColor: '#F0F0F0',
-      paddingBottom: 10,
+      borderBottomColor: '#F5F5F5',
+      paddingBottom: 15,
   },
   
   /* Route */
   routeContainer: {
-      paddingLeft: 5,
+      paddingLeft: 0,
   },
   routeRow: {
       flexDirection: 'row',
@@ -295,61 +372,72 @@ const styles = StyleSheet.create({
   },
   timelineCol: {
       alignItems: 'center',
-      width: 30,
-      marginRight: 10,
+      width: 24,
+      marginRight: 16,
   },
   dot: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      borderWidth: 2,
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+      borderWidth: 3,
       backgroundColor: '#FFF',
+      zIndex: 1,
   },
   dateSquare: {
-      width: 12,
-      height: 12,
-      borderRadius: 2,
-      borderWidth: 2,
+      width: 14,
+      height: 14,
+      borderRadius: 4,
+      borderWidth: 3,
       backgroundColor: '#FFF',
+      zIndex: 1,
   },
   line: {
       width: 2,
-      height: 40,
-      backgroundColor: '#E0E0E0',
-      marginVertical: 4,
+      flex: 1,
+      backgroundColor: '#F0F0F0',
+      marginVertical: -2,
+      zIndex: 0,
   },
   routeInfo: {
       flex: 1,
-      paddingBottom: 20,
+      paddingBottom: 30,
   },
   routeLabel: {
-      fontSize: 12,
-      color: '#888',
-      marginBottom: 4,
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#999',
+      marginBottom: 6,
+      textTransform: 'uppercase',
   },
   routeAddress: {
       fontSize: 15,
-      color: '#333',
-      fontWeight: '500',
-      lineHeight: 20,
+      color: '#222',
+      fontWeight: '600',
+      lineHeight: 22,
   },
   
   /* Grid */
   grid: {
       flexDirection: 'row',
+      gap: 15,
   },
   gridItem: {
       flex: 1,
+      backgroundColor: '#F9F9F9',
+      padding: 16,
+      borderRadius: 16,
   },
   gridLabel: {
       color: '#888',
-      fontSize: 12,
-      marginBottom: 4,
+      fontSize: 11,
+      fontWeight: '600',
+      marginBottom: 6,
+      textTransform: 'uppercase',
   },
   gridValue: {
       color: '#333',
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
   },
 
   /* Party */
@@ -358,16 +446,37 @@ const styles = StyleSheet.create({
       alignItems: 'center',
   },
   partyIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: '#F5F5F5',
       justifyContent: 'center',
       alignItems: 'center',
-      marginRight: 15,
+      marginRight: 16,
   },
   subText: {
-      color: '#999',
+      color: '#888',
       fontSize: 13,
+      marginTop: 2,
+  },
+  
+  actionButton: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 18,
+      borderRadius: 20,
+      marginBottom: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 12,
+      elevation: 8,
+  },
+  actionButtonText: {
+      color: '#FFF',
+      fontSize: 16,
+      fontWeight: '700',
+      letterSpacing: 0.5,
   },
 });

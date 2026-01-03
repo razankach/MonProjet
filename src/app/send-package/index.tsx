@@ -2,7 +2,7 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, PanResponder, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, PanResponder, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -18,11 +18,15 @@ export default function SendPackage() {
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
   
+  // Coordinate State (Precise)
+  const [pickupLocation, setPickupLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [dropoffLocation, setDropoffLocation] = useState<{lat: number, lng: number} | null>(null);
+  
   // Form State
   const [fromAddress, setFromAddress] = useState('');
   const [toAddress, setToAddress] = useState('');
   const [packageType, setPackageType] = useState('');
-  const [recipientName, setRecipientName] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
   const [weight, setWeight] = useState('');
   const [price, setPrice] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -101,8 +105,10 @@ export default function SendPackage() {
       if (selectedLocation) {
           if (activeField === 'from') {
                reverseGeocode(selectedLocation.lat, selectedLocation.lng, setFromAddress);
+               setPickupLocation(selectedLocation);
           } else {
                reverseGeocode(selectedLocation.lat, selectedLocation.lng, setToAddress);
+               setDropoffLocation(selectedLocation);
           }
           collapseMap();
           setSelectedLocation(null); 
@@ -125,8 +131,8 @@ export default function SendPackage() {
         Alert.alert("Error", "You must be logged in to send a package.");
         return;
     }
-    if (!fromAddress || !toAddress || !packageType || !recipientName) {
-        Alert.alert("Missing Fields", "Please fill in all required fields (Locations, Type, Recipient).");
+    if (!fromAddress || !toAddress || !packageType || !recipientPhone) {
+        Alert.alert("Missing Fields", "Please fill in all required fields (Locations, Type, Phone).");
         return;
     }
 
@@ -137,13 +143,19 @@ export default function SendPackage() {
             .insert({
                 sender_id: user.id,
                 title: packageType,
-                description: `${recipientName} - ${instructions}`, 
+                description: `Phone: ${recipientPhone} - ${instructions}`, 
                 pickup_address: fromAddress,
                 dropoff_address: toAddress,
                 weight: weight ? parseFloat(weight) : null,
                 price: price ? parseFloat(price) : null,
-                status: 'pending'
+                status: 'pending',
+                // Save coordinates!
+                pickup_latitude: locationMethod === 'current' ? currentLocation?.coords.latitude : pickupLocation?.lat,
+                pickup_longitude: locationMethod === 'current' ? currentLocation?.coords.longitude : pickupLocation?.lng,
+                dropoff_latitude: dropoffLocation?.lat,
+                dropoff_longitude: dropoffLocation?.lng
             });
+
 
         if (error) throw error;
 
@@ -176,8 +188,10 @@ export default function SendPackage() {
         <div id="map"></div>
         <script>
           var map = L.map('map').setView([${lat}, ${lng}], 13);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
           }).addTo(map);
           var marker;
           if (${hasLocation}) {
@@ -212,10 +226,15 @@ export default function SendPackage() {
           <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
       >
+        <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+        >
         <Text style={styles.pageSubtitle}>Where are we sending this?</Text>
 
         {/* --- Location Section --- */}
@@ -277,73 +296,86 @@ export default function SendPackage() {
         </View>
 
 
-        {/* --- Package Details --- */}
-        <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Package Details</Text>
-        </View>
-        
-        <View style={styles.detailsGrid}>
-            <View style={styles.gridItem}>
-                <View style={styles.floatingInput}>
-                    <Feather name="box" size={20} color="#555" />
-                    <TextInput 
-                        style={styles.bareInput} 
-                        placeholder="Type (e.g., Documents)" 
-                        placeholderTextColor="#999"
-                        value={packageType}
-                        onChangeText={setPackageType}
-                    />
+            {/* --- Package Details --- */}
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>What are you sending?</Text>
+            </View>
+
+            {/* Type Selector */}
+            <View style={styles.typeSelectorContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 2 }}>
+                    {['Documents', 'Small Box', 'Large Box', 'Fragile', 'Groceries'].map((type) => (
+                        <TouchableOpacity 
+                            key={type}
+                            style={[
+                                styles.typeChip, 
+                                packageType === type && styles.typeChipSelected
+                            ]}
+                            onPress={() => setPackageType(type)}
+                        >
+                            <Text style={[
+                                styles.typeChipText, 
+                                packageType === type && styles.typeChipTextSelected
+                            ]}>{type}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+            
+            <View style={styles.detailsGrid}>
+                {/* Weight */}
+                <View style={styles.gridItem}>
+                    <View style={styles.floatingInput}>
+                        <FontAwesome5 name="weight-hanging" size={18} color="#7B1FA2" />
+                        <TextInput 
+                            style={styles.bareInput} 
+                            placeholder="Weight (kg)" 
+                            placeholderTextColor="#AAA" 
+                            keyboardType="numeric"
+                            value={weight}
+                            onChangeText={setWeight}
+                        />
+                    </View>
+                </View>
+
+                {/* Price */}
+                <View style={styles.gridItem}>
+                    <View style={styles.floatingInput}>
+                        <Feather name="dollar-sign" size={20} color="#388E3C" />
+                        <TextInput 
+                            style={styles.bareInput} 
+                            placeholder="Price (DA)" 
+                            placeholderTextColor="#AAA" 
+                            keyboardType="numeric"
+                            value={price}
+                            onChangeText={setPrice}
+                        />
+                    </View>
                 </View>
             </View>
 
-            <View style={styles.gridItem}>
-                <View style={styles.floatingInput}>
-                    <FontAwesome5 name="weight-hanging" size={18} color="#555" />
-                    <TextInput 
-                        style={styles.bareInput} 
-                        placeholder="Weight (kg)" 
-                        placeholderTextColor="#999" 
-                        keyboardType="numeric"
-                        value={weight}
-                        onChangeText={setWeight}
-                    />
-                </View>
+            <View style={[styles.floatingInput, { marginTop: 16 }]}>
+                <Feather name="phone" size={20} color="#555" />
+                <TextInput 
+                    style={styles.bareInput} 
+                    placeholder="Recipient Phone" 
+                    placeholderTextColor="#AAA"
+                    keyboardType="phone-pad"
+                    value={recipientPhone}
+                    onChangeText={setRecipientPhone}
+                />
             </View>
-        </View>
 
-        <View style={[styles.floatingInput, { marginTop: 15 }]}>
-            <Feather name="user" size={20} color="#555" />
-            <TextInput 
-                style={styles.bareInput} 
-                placeholder="Recipient Name" 
-                placeholderTextColor="#999"
-                value={recipientName}
-                onChangeText={setRecipientName}
-            />
-        </View>
-
-        <View style={[styles.floatingInput, { marginTop: 15 }]}>
-            <Feather name="dollar-sign" size={20} color="#555" />
-            <TextInput 
-                style={styles.bareInput} 
-                placeholder="Offering Price (DA)" 
-                placeholderTextColor="#999" 
-                keyboardType="numeric"
-                value={price}
-                onChangeText={setPrice}
-            />
-        </View>
-
-        <View style={[styles.floatingInput, { marginTop: 15 }]}>
-            <MaterialIcons name="notes" size={22} color="#555" />
-            <TextInput 
-                style={styles.bareInput} 
-                placeholder="Special instructions..." 
-                placeholderTextColor="#999"
-                value={instructions}
-                onChangeText={setInstructions} 
-            />
-        </View>
+            <View style={[styles.floatingInput, { marginTop: 16 }]}>
+                <MaterialIcons name="notes" size={22} color="#555" />
+                <TextInput 
+                    style={styles.bareInput} 
+                    placeholder="Special instructions (e.g., Gate code)..." 
+                    placeholderTextColor="#AAA"
+                    value={instructions}
+                    onChangeText={setInstructions} 
+                />
+            </View>
 
         {/* Submit Button */}
         <TouchableOpacity 
@@ -358,9 +390,10 @@ export default function SendPackage() {
         </TouchableOpacity>
 
         {/* Spacer */}
-        <View style={{ height: 120 }} />
+        <View style={{ height: 300 }} />
 
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Map Bottom Sheet */}
       <Animated.View 
@@ -422,48 +455,52 @@ import { FontAwesome5 } from '@expo/vector-icons';
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#FAFAFA', 
+    backgroundColor: '#F8F9FA', 
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 15,
-    paddingBottom: 15,
+    paddingTop: 50,
+    paddingBottom: 20,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   backButton: {
-    padding: 8,
-    borderRadius: 50,
-    backgroundColor: '#F0F0F0',
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1A1A1A',
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingTop: 24,
   },
   pageSubtitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#1A1A1A',
-    marginBottom: 30,
-    marginTop: 0,
+    marginBottom: 32,
+    marginTop: 10,
     lineHeight: 34,
+    letterSpacing: -0.5,
   },
   
   /* Sections */
   sectionHeader: {
-      marginBottom: 15,
-      marginTop: 20,
+      marginBottom: 16,
+      marginTop: 10,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#888',
+    color: '#999',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -471,13 +508,13 @@ const styles = StyleSheet.create({
   /* Route Visuals */
   routeContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   timeline: {
     alignItems: 'center',
-    marginRight: 20,
-    paddingTop: 45, 
-    paddingBottom: 45,
+    marginRight: 16,
+    paddingTop: 24, 
+    paddingBottom: 24,
   },
   dot: {
     width: 14,
@@ -485,13 +522,21 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 3,
     backgroundColor: '#FFF',
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   square: {
       width: 14,
       height: 14,
-      borderRadius: 2,
+      borderRadius: 4,
       borderWidth: 3,
       backgroundColor: '#FFF',
+      shadowColor: "#000",
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
   },
   line: {
     width: 2,
@@ -502,7 +547,7 @@ const styles = StyleSheet.create({
   },
   inputsColumn: {
       flex: 1,
-      gap: 20,
+      gap: 16,
   },
   
   /* Inputs */
@@ -511,7 +556,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
       fontSize: 12,
-      fontWeight: '600',
+      fontWeight: '700',
       color: '#555',
       marginBottom: 8,
       marginLeft: 4,
@@ -520,32 +565,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
-    elevation: 2,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   disabledInput: {
-      backgroundColor: '#F5F5F5',
+      backgroundColor: '#FAFAFA',
       shadowOpacity: 0,
       elevation: 0,
+      borderColor: '#EEE',
   },
   inputIcon: {
       marginRight: 14,
+      opacity: 0.8,
   },
   inputTextValue: {
       flex: 1,
-      fontSize: 16,
+      fontSize: 15,
       color: '#1A1A1A',
-      fontWeight: '500',
+      fontWeight: '600',
   },
   placeholder: {
       color: '#999',
-      fontWeight: '400',
+      fontWeight: '500',
   },
 
   /* Toggle Pills */
@@ -553,14 +602,14 @@ const styles = StyleSheet.create({
       flexDirection: 'row',
       backgroundColor: '#F0F0F0',
       borderRadius: 50,
-      padding: 4,
-      marginTop: 10,
-      marginBottom: 10,
+      padding: 5,
+      marginTop: 0,
+      marginBottom: 32,
   },
   pillOption: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: 10,
       borderRadius: 40,
   },
   pillSelectedMap: {
@@ -580,18 +629,57 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   pillText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#666',
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#777',
   },
   textSelected: {
       color: '#FFF',
   },
 
+
+  /* Type Selector */
+  typeSelectorContainer: {
+      marginBottom: 20,
+      height: 50,
+  },
+  typeChip: {
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 25,
+      backgroundColor: '#FFF',
+      borderWidth: 1,
+      borderColor: '#EEE',
+      marginRight: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+      justifyContent: 'center',
+  },
+  typeChipSelected: {
+      backgroundColor: '#4A148C',
+      borderColor: '#4A148C',
+      shadowColor: "#4A148C",
+      shadowOpacity: 0.3,
+      elevation: 4,
+  },
+  typeChipText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#555',
+  },
+  typeChipTextSelected: {
+      color: '#FFF',
+      fontWeight: '700',
+  },
+
   /* Details Grid */
   detailsGrid: {
-      gap: 15,
-      flexDirection: 'row', // Make them side by side
+      gap: 16,
+      flexDirection: 'row', 
+      marginBottom: 0,
   },
   gridItem: {
       flex: 1,
@@ -604,37 +692,46 @@ const styles = StyleSheet.create({
       paddingHorizontal: 16,
       paddingVertical: 16,
       borderWidth: 1,
-      borderColor: '#EEE',
+      borderColor: '#F0F0F0',
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.03,
+      shadowRadius: 5,
+      elevation: 1,
   },
   bareInput: {
       flex: 1,
-      fontSize: 16,
+      fontSize: 15,
       marginLeft: 12,
       color: '#333',
+      fontWeight: '500',
   },
 
   /* Submit Button */
   submitButton: {
       backgroundColor: '#7B1FA2',
-      borderRadius: 16,
-      paddingVertical: 18,
+      borderRadius: 20,
+      paddingVertical: 20,
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: 30,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 5,
+      marginTop: 40,
+      shadowColor: '#7B1FA2',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 15,
+      elevation: 8,
   },
   submitDisabled: {
-      backgroundColor: '#888',
+      backgroundColor: '#BDBDBD',
+      shadowOpacity: 0,
+      elevation: 0,
   },
   submitText: {
       color: '#FFF',
-      fontSize: 16,
-      fontWeight: 'bold',
+      fontSize: 17,
+      fontWeight: '800',
+      letterSpacing: 0.5,
   },
 
   /* Bottom Sheet */
@@ -645,23 +742,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: SHEET_MAX_HEIGHT,
     backgroundColor: '#FFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 25,
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 30,
     zIndex: 999,
+    overflow: 'hidden',
   },
   sheetHandleContainer: {
-    height: 35,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFF',
   },
   sheetHandle: {
-    width: 50,
-    height: 5,
+    width: 48,
+    height: 6,
     backgroundColor: '#E0E0E0',
     borderRadius: 10,
   },
@@ -671,66 +770,74 @@ const styles = StyleSheet.create({
   },
   mapOverlay: {
       position: 'absolute',
-      bottom: 30,
+      bottom: 40,
       left: 20,
       right: 20,
   },
   confirmBanner: {
-      backgroundColor: '#1A1A1A',
-      padding: 12,
+      backgroundColor: '#222',
+      padding: 10,
+      paddingRight: 10,
       borderRadius: 50,
       flexDirection: 'row',
       alignItems: 'center',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 8,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.4,
+      shadowRadius: 15,
+      elevation: 10,
   },
   bannerIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: '#333',
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#444',
       justifyContent: 'center',
       alignItems: 'center',
+      borderWidth: 2,
+      borderColor: '#555',
   },
   bannerLabel: {
-      color: '#AAA',
+      color: '#888',
       fontSize: 10,
-      fontWeight: '700',
+      fontWeight: '800',
       textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 2,
   },
   bannerAddress: {
       color: '#FFF',
       fontSize: 14,
-      fontWeight: '600',
+      fontWeight: '700',
   },
   minimalConfirmBtn: {
       backgroundColor: '#FFF',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 20,
-  },
-  minimalConfirmText: {
-      color: '#000',
-      fontWeight: '700',
-      fontSize: 12,
-  },
-  instructionBanner: {
-      alignSelf: 'center',
-      backgroundColor: 'rgba(255,255,255,0.9)',
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 30,
+      marginLeft: 10,
+  },
+  minimalConfirmText: {
+      color: '#000',
+      fontWeight: '800',
+      fontSize: 13,
+  },
+  instructionBanner: {
+      alignSelf: 'center',
+      backgroundColor: 'rgba(255,255,255,0.95)',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 30,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      elevation: 5,
+      borderWidth: 1,
+      borderColor: '#EEE',
   },
   instructionText: {
       color: '#333',
       fontSize: 14,
-      fontWeight: '600',
+      fontWeight: '700',
   },
 });

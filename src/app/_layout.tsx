@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import LocationTracker from "../components/LocationTracker";
 
 function AppLayout() {
   const { user, isLoading } = useAuth();
@@ -57,6 +58,7 @@ function AppLayout() {
 export default function RootLayout() {
   return (
     <AuthProvider>
+      <LocationTracker />
       <AppLayout />
     </AuthProvider>
   );
